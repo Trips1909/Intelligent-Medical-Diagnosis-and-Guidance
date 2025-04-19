@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "../ChatBot.css";
 
-const ChatBot = () => {
+const ChatBot = ({ formData }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -10,16 +10,13 @@ const ChatBot = () => {
   const [answers, setAnswers] = useState([]);
 
   useEffect(() => {
-    setMessages([
-      { sender: "bot", text: "Hello! Tell me what you're facing?" },
-    ]);
+    setMessages([{ sender: "bot", text: "Hello! Tell me what you're facing?" }]);
   }, []);
 
   const handleSend = async () => {
     if (!input.trim()) return;
 
     const token = localStorage.getItem("jwt_token");
-
     const userMsg = { sender: "user", text: input };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -48,46 +45,44 @@ const ChatBot = () => {
       } = res.data;
 
       if (next_question) {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "bot", text: next_question },
-        ]);
+        setMessages((prev) => [...prev, { sender: "bot", text: next_question }]);
         setQuestionIndex(question_index);
         setFollowupCount(followup_count);
         setAnswers((prev) => [...prev, input]);
       }
 
       if (show_result && reply) {
-        const lines = reply.split("\n");
-        const [predictionLine, recommendationLine, ...rest] = lines;
-        const confidenceMatch = predictionLine.match(/\((\d+(\.\d+)?)%\)/);
-        const confidence = confidenceMatch ? confidenceMatch[1] : null;
-
-        setMessages((prev) =>
-          [
-            ...prev,
-            { sender: "bot", text: predictionLine },
-            confidence
-              ? { sender: "bot", text: `Confidence Score: ${confidence}%` }
-              : null,
-            recommendationLine
-              ? { sender: "bot", text: recommendationLine }
-              : null,
-            ...rest.map((line) => ({ sender: "bot", text: line })),
-            { sender: "bot", text: "Hello! Tell me what you're facing?" },
-          ].filter(Boolean)
+        const predictRes = await axios.post(
+          "http://localhost:5000/predict",
+          {
+            form: formData,
+            answers: [...answers, input], // All 10 answers
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
+        const { prediction, confidence, advice } = predictRes.data;
+
+        const summary = [
+          { sender: "bot", text: `Likely Condition: ${prediction}` },
+          { sender: "bot", text: `Confidence Score: ${confidence}%` },
+          { sender: "bot", text: `Recommendation: ${advice}` },
+        ];
+
+        setMessages((prev) => [...prev, ...summary]);
+
+        // Reset for new chat
         setQuestionIndex(0);
         setFollowupCount(0);
         setAnswers([]);
       }
     } catch (err) {
-      console.error("API error:", err);
-      setMessages((prev) => [
-        ...prev,
-        { sender: "bot", text: "Something went wrong. Please try again." },
-      ]);
+      console.error("Chat error:", err);
+      setMessages((prev) => [...prev, { sender: "bot", text: "Something went wrong." }]);
     }
 
     setInput("");
@@ -97,9 +92,7 @@ const ChatBot = () => {
     <div className="chat-container">
       <div className="chat-box">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.sender}`}>
-            {msg.text}
-          </div>
+          <div key={idx} className={`message ${msg.sender}`}>{msg.text}</div>
         ))}
       </div>
       <div className="input-box">

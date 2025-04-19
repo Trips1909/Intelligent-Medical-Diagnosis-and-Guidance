@@ -1,48 +1,45 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from nltk.tokenize import TreebankWordTokenizer
-from nlp import extract_symptoms
-from ensemble import predict_diagnosis
-from recommendation import get_recommendation
-from adaptive_routing import route_next_question
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+from ensemble import predict_diagnosis, predict_diagnosis_from_structured
+from recommendation import get_recommendation
+from adaptive_routing import route_next_question
+from nlp import extract_symptoms
 import csv
 import os
 from datetime import timedelta
 
-# 🔁 Load environment variables
+# 🔁 Load .env variables
 load_dotenv()
-
 app = Flask(__name__)
 CORS(app)
 
-# ✅ MongoDB Atlas connection string from .env
+# ✅ MongoDB setup
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 client = MongoClient(app.config["MONGO_URI"])
 db = client["Patient1"]
 users_collection = db["users"]
 
-# ✅ JWT Config
+# ✅ JWT setup
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your-secret-key")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt = JWTManager(app)
 
-# 🔍 Core Constants
+# 🔍 General Diagnosis Questions
 GENERAL_QUESTIONS = [
-    "How have you been feeling lately?",
-    "Have you experienced any unusual changes in behavior?",
-    "Are there any particular thoughts that worry you often?",
-    "Do you feel comfortable in social settings?",
-    "Have your sleeping patterns changed recently?",
-    "Do you find it hard to concentrate on tasks?",
-    "Are there any repetitive thoughts or actions you engage in?",
-    "Have you faced difficulties in expressing emotions?",
-    "Do loud sounds or bright lights affect you strongly?",
-    "Is change in routine distressing for you?"
+    "How often do you find yourself worrying excessively?",
+    "Do you feel uncomfortable or anxious in social situations?",
+    "Do you find it difficult to concentrate on daily tasks?",
+    "Have your sleeping patterns changed or become irregular?",
+    "Have you noticed sudden changes in mood or behavior?",
+    "Do you find it difficult to express or identify your emotions?",
+    "Do you feel the urge to perform repetitive actions or rituals?",
+    "Do you find it hard to start or maintain conversations?",
+    "Are you very sensitive to sounds, lights, or textures?",
+    "Do changes in your routine cause you significant stress?"
 ]
 
 CONFIDENCE_THRESHOLD = 85
@@ -63,7 +60,45 @@ ARTICLE_LINKS = {
     ]
 }
 
-# 💬 Chat Route
+# 🔧 Q1–Q10 Interpretation
+def interpret_q_answer(index, text):
+    text = text.lower()
+    if any(x in text for x in ["always", "frequently", "daily", "every day", "often", "all the time"]):
+        return 1
+    elif any(x in text for x in ["sometimes", "occasionally", "not often", "rarely"]):
+        return 0
+    return -1
+
+# 📥 Feedback Storage
+def save_structured_feedback(responses, diagnosis, confidence, extracted_keywords):
+    folder = "data"
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, "feedback.csv")
+
+    padded = responses[:15] + [""] * (15 - len(responses))
+    keyword_str = ", ".join(extracted_keywords or [])
+    row = padded + [diagnosis, confidence, keyword_str]
+
+    headers = [f"Q{i+1}" for i in range(10)] + [f"Followup{i+1}" for i in range(5)] + [
+        "Diagnosis", "Confidence", "CRF Keywords"
+    ]
+
+    file_exists = os.path.isfile(path)
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(row)
+
+# 📌 Static Field Order
+def form_keys():
+    return [
+        "Gender", "Country", "Occupation", "self_employed", "family_history", "treatment",
+        "Growing_Stress", "Changes_Habits", "Mental_Health_History", "Mood_Swings",
+        "Coping_Struggles", "Work_Interest", "Social_Weakness", "mental_health_interview"
+    ]
+
+# 💬 Chat Diagnosis (free text)
 @app.route('/chat', methods=['POST'])
 @jwt_required()
 def chat():
@@ -73,11 +108,12 @@ def chat():
     followup_count = data.get('followup_count', 0)
     responses = data.get('answers', [])
 
+    # Combine all text responses for CRF symptom extraction
     all_text = " ".join(responses + [message])
-    all_tokens = TreebankWordTokenizer().tokenize(all_text)
-    all_symptoms = extract_symptoms(all_tokens)
+    all_symptoms = extract_symptoms(all_text)
     print(f"[DEBUG] Extracted symptoms: {all_symptoms}")
 
+    # Still asking general diagnostic questions (Q1–Q10)
     if index < len(GENERAL_QUESTIONS):
         return jsonify({
             "reply": None,
@@ -87,9 +123,18 @@ def chat():
             "answers": responses + [message]
         })
 
-    diagnosis, confidence = predict_diagnosis(all_symptoms)
+    # If Q1–Q10 are done, we don’t predict yet — wait for `/predict`
+    return jsonify({
+        "reply": "Thank you for your responses. Please proceed to submit for final diagnosis.",
+        "next_question": None,
+        "question_index": 0,
+        "followup_count": 0,
+        "answers": responses + [message],
+        "show_result": False,
+        "crf_keywords": all_symptoms  # frontend can optionally collect and forward to /predict
+    })
 
-    # ⛔️ Check for vague response
+
     if len(all_symptoms) < 3 or message.lower() in ["ok", "i don't know", "maybe", "not sure"]:
         confidence = min(confidence, 60)
 
@@ -112,7 +157,7 @@ def chat():
             "show_result": True
         })
 
-    save_structured_feedback(responses + [message], diagnosis, confidence)
+    save_structured_feedback(responses + [message], diagnosis, confidence, all_symptoms)
     advice = get_recommendation(diagnosis)
     articles = ARTICLE_LINKS.get(diagnosis, [])
     reply = f"Likely condition: {diagnosis} ({confidence}%)\nRecommendation: {advice}"
@@ -128,7 +173,27 @@ def chat():
         "show_result": True
     })
 
-# 🔑 Login Route
+# 📊 Structured Prediction (form + interpreted chat)
+@app.route('/predict', methods=['POST'])
+@jwt_required()
+def predict():
+    data = request.get_json()
+    form = data.get("form", {})
+    q_raw_answers = data.get("answers", [])
+
+    structured_qs = {f"Q{i+1}": interpret_q_answer(i, q_raw_answers[i]) for i in range(10)}
+    input_data = {**form, **structured_qs}
+
+    diagnosis, confidence = predict_diagnosis_from_structured(input_data)
+    advice = get_recommendation(diagnosis)
+
+    return jsonify({
+        "prediction": diagnosis,
+        "confidence": confidence,
+        "advice": advice
+    })
+
+# 🔑 Login
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -137,11 +202,11 @@ def login():
 
     user = users_collection.find_one({"email": email})
     if user and check_password_hash(user["password"], password):
-        access_token = create_access_token(identity=email)
-        return jsonify(access_token=access_token), 200
+        token = create_access_token(identity=email)
+        return jsonify(access_token=token), 200
     return jsonify({"msg": "Invalid credentials"}), 401
 
-# 📝 Register Route
+# 📝 Register
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -152,21 +217,27 @@ def register():
         return jsonify({"msg": "User already exists"}), 409
 
     hashed_password = generate_password_hash(password)
-    users_collection.insert_one({
-        "email": email,
-        "password": hashed_password
-    })
+    users_collection.insert_one({"email": email, "password": hashed_password})
     return jsonify({"msg": "Registration successful"}), 201
 
-# 📥 Feedback Storage
-def save_structured_feedback(responses, predicted, confidence):
+# ✅ Feedback Endpoint for Structured Form
+@app.route('/log_feedback', methods=['POST'])
+@jwt_required()
+def log_feedback():
+    data = request.get_json()
+    form = data.get("form", {})
+    q_answers = data.get("answers", [])
+    diagnosis = data.get("diagnosis")
+    confidence = data.get("confidence")
+    symptoms = data.get("symptoms", [])
+
     folder = "data"
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "feedback.csv")
 
-    padded = responses[:15] + [""] * (15 - len(responses))
-    row = padded + [predicted, confidence]
-    headers = [f"Q{i+1}" for i in range(10)] + [f"Followup{i+1}" for i in range(5)] + ["Predicted Label", "Confidence (%)"]
+    structured_qs = {f"Q{i+1}": interpret_q_answer(i, q_answers[i]) for i in range(10)}
+    row = [form.get(k, "") for k in form_keys()] + list(structured_qs.values()) + [diagnosis, confidence, ", ".join(symptoms)]
+    headers = form_keys() + [f"Q{i+1}" for i in range(10)] + ["Diagnosis", "Confidence", "CRF Keywords"]
 
     file_exists = os.path.isfile(path)
     with open(path, "a", newline="", encoding="utf-8") as f:
@@ -175,7 +246,9 @@ def save_structured_feedback(responses, predicted, confidence):
             writer.writerow(headers)
         writer.writerow(row)
 
-# 🚀 Run Server
+    return jsonify({"msg": "Feedback saved"}), 200
+
+# 🚀 Run Flask App
 if __name__ == '__main__':
     print("✅ Flask app is starting...")
     app.run(debug=True)
