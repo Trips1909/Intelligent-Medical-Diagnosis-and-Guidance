@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import ChatBot from "./components/ChatBot";
 import LoginPage from "./components/LoginPage";
+import RegisterPage from "./components/RegisterPage";
 import "./App.css";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
@@ -20,6 +22,10 @@ function App() {
     setIsLoggedIn(true);
   };
 
+  const handleRegisterSuccess = () => {
+    setShowRegister(false);
+  };
+
   return (
     <div className="app">
       <h1 className="header">🩺 Mental Health Diagnostic Assistant</h1>
@@ -30,8 +36,13 @@ function App() {
           </button>
           <ChatBot />
         </>
+      ) : showRegister ? (
+        <RegisterPage onRegisterSuccess={handleRegisterSuccess} />
       ) : (
-        <LoginPage onLogin={handleLogin} />
+        <>
+          <LoginPage onLogin={handleLogin} />
+          <button onClick={() => setShowRegister(true)}>Register</button>
+        </>
       )}
     </div>
   );

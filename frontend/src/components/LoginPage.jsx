@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import "./LoginPage.css";
 
-const LoginPage = ({ onLogin }) => {
+const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -41,6 +41,12 @@ const LoginPage = ({ onLogin }) => {
         />
         <button type="submit">Login</button>
       </form>
+      <p style={{ marginTop: "10px" }}>
+        Don't have an account?{" "}
+        <span className="link" onClick={onSwitchToRegister}>
+          Register here
+        </span>
+      </p>
     </div>
   );
 };

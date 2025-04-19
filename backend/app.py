@@ -5,12 +5,33 @@ from nlp import extract_symptoms
 from ensemble import predict_diagnosis
 from recommendation import get_recommendation
 from adaptive_routing import route_next_question
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from flask_jwt_extended import get_jwt_identity
+from pymongo import MongoClient
+from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 import csv
 import os
+from datetime import timedelta
+
+# 🔁 Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
+# ✅ MongoDB Atlas connection string from .env
+app.config["MONGO_URI"] = os.getenv("MONGO_URI")
+client = MongoClient(app.config["MONGO_URI"])
+db = client["Patient1"]
+users_collection = db["users"]
+
+# ✅ JWT Config
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+jwt = JWTManager(app)
+
+# 🔍 Core Constants
 GENERAL_QUESTIONS = [
     "How have you been feeling lately?",
     "Have you experienced any unusual changes in behavior?",
@@ -42,7 +63,9 @@ ARTICLE_LINKS = {
     ]
 }
 
+# 💬 Chat Route
 @app.route('/chat', methods=['POST'])
+@jwt_required()
 def chat():
     data = request.get_json()
     message = data['message']
@@ -53,6 +76,7 @@ def chat():
     all_text = " ".join(responses + [message])
     all_tokens = TreebankWordTokenizer().tokenize(all_text)
     all_symptoms = extract_symptoms(all_tokens)
+    print(f"[DEBUG] Extracted symptoms: {all_symptoms}")
 
     if index < len(GENERAL_QUESTIONS):
         return jsonify({
@@ -104,6 +128,37 @@ def chat():
         "show_result": True
     })
 
+# 🔑 Login Route
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    user = users_collection.find_one({"email": email})
+    if user and check_password_hash(user["password"], password):
+        access_token = create_access_token(identity=email)
+        return jsonify(access_token=access_token), 200
+    return jsonify({"msg": "Invalid credentials"}), 401
+
+# 📝 Register Route
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    if users_collection.find_one({"email": email}):
+        return jsonify({"msg": "User already exists"}), 409
+
+    hashed_password = generate_password_hash(password)
+    users_collection.insert_one({
+        "email": email,
+        "password": hashed_password
+    })
+    return jsonify({"msg": "Registration successful"}), 201
+
+# 📥 Feedback Storage
 def save_structured_feedback(responses, predicted, confidence):
     folder = "data"
     os.makedirs(folder, exist_ok=True)
@@ -120,6 +175,7 @@ def save_structured_feedback(responses, predicted, confidence):
             writer.writerow(headers)
         writer.writerow(row)
 
+# 🚀 Run Server
 if __name__ == '__main__':
     print("✅ Flask app is starting...")
     app.run(debug=True)
