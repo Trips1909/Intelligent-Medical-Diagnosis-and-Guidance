@@ -8,6 +8,7 @@ const ChatBot = ({ formData }) => {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [followupCount, setFollowupCount] = useState(0);
   const [answers, setAnswers] = useState([]);
+  const [crfKeywords, setCrfKeywords] = useState([]);
 
   useEffect(() => {
     setMessages([{ sender: "bot", text: "Hello! Tell me what you're facing?" }]);
@@ -42,8 +43,13 @@ const ChatBot = ({ formData }) => {
         question_index,
         followup_count,
         show_result,
+        crf_keywords
       } = res.data;
 
+      // Save keywords if present
+      if (crf_keywords) setCrfKeywords(crf_keywords);
+
+      // Add next question if exists
       if (next_question) {
         setMessages((prev) => [...prev, { sender: "bot", text: next_question }]);
         setQuestionIndex(question_index);
@@ -51,21 +57,35 @@ const ChatBot = ({ formData }) => {
         setAnswers((prev) => [...prev, input]);
       }
 
+      // Predict after Q10
       if (show_result && reply) {
         const predictRes = await axios.post(
           "http://localhost:5000/predict",
           {
             form: formData,
-            answers: [...answers, input], // All 10 answers
+            answers: [...answers, input],
           },
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
         const { prediction, confidence, advice } = predictRes.data;
+
+        // Save feedback
+        await axios.post(
+          "http://localhost:5000/log_feedback",
+          {
+            form: formData,
+            answers: [...answers, input],
+            diagnosis: prediction,
+            confidence: confidence,
+            symptoms: crfKeywords,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
         const summary = [
           { sender: "bot", text: `Likely Condition: ${prediction}` },
@@ -75,14 +95,19 @@ const ChatBot = ({ formData }) => {
 
         setMessages((prev) => [...prev, ...summary]);
 
-        // Reset for new chat
+        // Reset chat state
         setQuestionIndex(0);
         setFollowupCount(0);
         setAnswers([]);
+        setCrfKeywords([]);
       }
+
     } catch (err) {
       console.error("Chat error:", err);
-      setMessages((prev) => [...prev, { sender: "bot", text: "Something went wrong." }]);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "bot", text: "Something went wrong. Please try again." },
+      ]);
     }
 
     setInput("");
@@ -92,7 +117,9 @@ const ChatBot = ({ formData }) => {
     <div className="chat-container">
       <div className="chat-box">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.sender}`}>{msg.text}</div>
+          <div key={idx} className={`message ${msg.sender}`}>
+            {msg.text}
+          </div>
         ))}
       </div>
       <div className="input-box">

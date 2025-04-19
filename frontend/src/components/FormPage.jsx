@@ -28,6 +28,9 @@ const FormPage = ({ onSubmit }) => {
     onSubmit(form);
   };
 
+  localStorage.setItem("demographic_form", JSON.stringify(form));
+
+
   return (
     <form onSubmit={handleSubmit} className="form-container">
       <h2>🧾 Demographic Information</h2>

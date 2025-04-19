@@ -73,8 +73,10 @@ def predict_diagnosis(user_text, return_all=False):
 
 # 🚀 Mode 2: Structured Form + Q1–Q10 (Direct)
 def predict_diagnosis_from_structured(input_dict, return_all=False):
-    X_input = preprocessor.transform([input_dict])
+    X_df = pd.DataFrame([input_dict])  # ✅ Fix: use DataFrame
+    X_input = preprocessor.transform(X_df)
     return _ensemble_predict(X_input, return_all)
+
 
 # 🧮 Core Weighted Prediction Logic
 def _ensemble_predict(X_input, return_all=False):
