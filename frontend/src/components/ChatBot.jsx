@@ -9,22 +9,16 @@ const ChatBot = ({ formData }) => {
   const [answers, setAnswers] = useState([]);
   const [crfKeywords, setCrfKeywords] = useState([]);
   const [showFollowups, setShowFollowups] = useState(false);
-  const [gptIndex, setGptIndex] = useState(0);
   const [gptResponses, setGptResponses] = useState([]);
   const [baseConfidence, setBaseConfidence] = useState(null);
   const [diagnosis, setDiagnosis] = useState("");
   const [advice, setAdvice] = useState("");
-  const [awaitingGPT, setAwaitingGPT] = useState(false);
+  const [resourceLinks, setResourceLinks] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
-    const startChat = async () => {
-      const intro = [
-        { sender: "bot", text: "🧠 Welcome to your personal mental health assistant!" },
-        { sender: "bot", text: "Let's begin with a few quick questions to understand you better." }
-      ];
-      setMessages(intro);
 
+    const startChat = async () => {
       const res = await axios.post(
         "http://localhost:5000/chat",
         {
@@ -39,7 +33,13 @@ const ChatBot = ({ formData }) => {
       );
 
       const { next_question, question_index, crf_keywords } = res.data;
-      setMessages((prev) => [...prev, { sender: "bot", text: next_question }]);
+
+      setMessages([
+        { sender: "bot", text: "🧠 Welcome to your personal mental health assistant!" },
+        { sender: "bot", text: "Let's begin with a few quick questions to understand you better." },
+        { sender: "bot", text: next_question }
+      ]);
+
       setQuestionIndex(question_index);
       if (crf_keywords) setCrfKeywords(crf_keywords);
     };
@@ -50,11 +50,10 @@ const ChatBot = ({ formData }) => {
   const handleSend = async () => {
     if (!input.trim()) return;
     const token = localStorage.getItem("jwt_token");
-    const userMessage = { sender: "user", text: input };
-    setMessages((prev) => [...prev, userMessage]);
+
+    setMessages(prev => [...prev, { sender: "user", text: input }]);
     setInput("");
 
-    // If in GPT follow-up mode
     if (showFollowups) {
       try {
         const res = await axios.post(
@@ -72,23 +71,32 @@ const ChatBot = ({ formData }) => {
         );
 
         if (res.data.final) {
-          setMessages((prev) => [
-            ...prev,
+          const finalMessages = [
+            { sender: "bot", text: `✅ Final Diagnosis: ${diagnosis}` },
             { sender: "bot", text: `✅ Adjusted Confidence Score: ${res.data.updated_confidence}%` },
-            { sender: "bot", text: `📌 Recommendation: ${advice}` },
-          ]);
+            { sender: "bot", text: `📌 Recommendation: ${advice}` }
+          ];
+
+          if (res.data.resources && res.data.resources.length > 0) {
+            finalMessages.push({ sender: "bot", text: `📚 Helpful Resources:` });
+            res.data.resources.forEach((link, idx) => {
+              finalMessages.push({ sender: "bot", text: `🔗 [${idx + 1}] ${link}` });
+            });
+          }
+          
+
+          setMessages(prev => [...prev, ...finalMessages]);
           resetState();
         } else {
           setGptResponses(res.data.gpt_responses);
-          setMessages((prev) => [...prev, { sender: "bot", text: res.data.next_gpt_question }]);
+          setMessages(prev => [...prev, { sender: "bot", text: res.data.next_gpt_question }]);
         }
       } catch (err) {
-        setMessages((prev) => [...prev, { sender: "bot", text: "⚠️ GPT follow-up failed." }]);
+        setMessages(prev => [...prev, { sender: "bot", text: "⚠️ GPT follow-up failed." }]);
       }
       return;
     }
 
-    // Else: Normal diagnostic Q&A
     try {
       const res = await axios.post(
         "http://localhost:5000/chat",
@@ -103,18 +111,17 @@ const ChatBot = ({ formData }) => {
       );
 
       const {
-        reply,
         next_question,
         question_index,
         show_result,
         crf_keywords,
       } = res.data;
 
-      setAnswers((prev) => [...prev, input]);
+      setAnswers(prev => [...prev, input]);
       if (crf_keywords) setCrfKeywords(crf_keywords);
 
       if (next_question) {
-        setMessages((prev) => [...prev, { sender: "bot", text: next_question }]);
+        setMessages(prev => [...prev, { sender: "bot", text: next_question }]);
         setQuestionIndex(question_index);
       }
 
@@ -149,11 +156,10 @@ const ChatBot = ({ formData }) => {
           }
         );
 
-        // Begin GPT follow-ups
         const gptInit = await axios.post(
           "http://localhost:5000/gpt_followup",
           {
-            gpt_response: "", // first time
+            gpt_response: "",
             gpt_responses: [],
             base_confidence: confidence,
             diagnosis: prediction,
@@ -165,16 +171,17 @@ const ChatBot = ({ formData }) => {
         );
 
         setShowFollowups(true);
-        setMessages((prev) => [
+        setMessages(prev => [
           ...prev,
           { sender: "bot", text: `💡 Initial Diagnosis: ${prediction}` },
           { sender: "bot", text: `🧪 Starting GPT-based follow-ups to fine-tune confidence...` },
           { sender: "bot", text: gptInit.data.next_gpt_question },
         ]);
       }
+
     } catch (err) {
       console.error("Chat error:", err);
-      setMessages((prev) => [...prev, { sender: "bot", text: "Something went wrong. Please try again." }]);
+      setMessages(prev => [...prev, { sender: "bot", text: "Something went wrong. Please try again." }]);
     }
   };
 
@@ -183,11 +190,11 @@ const ChatBot = ({ formData }) => {
     setAnswers([]);
     setCrfKeywords([]);
     setShowFollowups(false);
-    setGptIndex(0);
     setGptResponses([]);
     setBaseConfidence(null);
     setDiagnosis("");
     setAdvice("");
+    setResourceLinks([]);
   };
 
   return (

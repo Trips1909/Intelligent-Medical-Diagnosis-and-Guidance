@@ -153,8 +153,11 @@ def gpt_followup():
         })
     else:
         return jsonify({
-            "final": True,
-            "updated_confidence": adjusted_conf
+         "final": True,
+         "updated_confidence": adjusted_conf,
+         "diagnosis": diagnosis,
+         "advice": get_recommendation(diagnosis),
+         "resources": ARTICLE_LINKS.get(diagnosis, [])
         })
 
 # 💾 Feedback Logging
