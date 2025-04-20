@@ -8,3 +8,9 @@ Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,-1,-1,0,-1,1,-
 Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,-1,1,0,0,0,0,-1,1,-1,-1,OCD,45.7,
 Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,-1,0,-1,-1,-1,0,-1,-1,-1,-1,Autism,41.01,
 Male,India,Student,Yes,No,Yes,Yes,Yes,Yes,Medium,Yes,No,Yes,Maybe,-1,-1,-1,1,-1,-1,1,-1,1,-1,OCD,58.32,trouble sleeping
+Male,India,Student,Yes,Yes,No,Yes,No,No,Medium,Yes,Yes,Yes,Yes,-1,1,-1,-1,-1,1,-1,-1,-1,-1,Autism,43.05,
+Male,India,Student,Yes,No,No,Yes,Yes,No,Low,Yes,Yes,Yes,Yes,-1,1,1,-1,1,-1,-1,-1,-1,-1,Anxiety,46.93,
+Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,No,No,Yes,-1,1,1,0,-1,1,1,-1,1,1,Anxiety,45.31,
+Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,1,-1,-1,-1,-1,-1,-1,-1,-1,-1,OCD,43.62,
+Male,India,Corporate,No,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,1,1,1,1,1,1,-1,1,1,1,Anxiety,66.98,
+Male,India,Student,Yes,Yes,Yes,Yes,Yes,Yes,Medium,Yes,Yes,Yes,Yes,-1,-1,-1,-1,-1,1,-1,1,1,1,OCD,38.58,

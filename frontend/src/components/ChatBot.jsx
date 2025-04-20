@@ -11,15 +11,46 @@ const ChatBot = ({ formData }) => {
   const [crfKeywords, setCrfKeywords] = useState([]);
 
   useEffect(() => {
-    setMessages([{ sender: "bot", text: "Hello! Tell me what you're facing?" }]);
+    const token = localStorage.getItem("jwt_token");
+
+    const startChat = async () => {
+      const introMsgs = [
+        { sender: "bot", text: "🧠 Welcome to your personal mental health assistant!" },
+        { sender: "bot", text: "Let's begin with a few quick questions to understand you better." },
+      ];
+
+      // Immediately fetch first question (without needing input)
+      const res = await axios.post(
+        "http://localhost:5000/chat",
+        {
+          message: "", // no message from user yet
+          question_index: 0,
+          followup_count: 0,
+          answers: [],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const { next_question, question_index, followup_count, crf_keywords } = res.data;
+      if (crf_keywords) setCrfKeywords(crf_keywords);
+
+      setMessages([...introMsgs, { sender: "bot", text: next_question }]);
+      setQuestionIndex(question_index);
+      setFollowupCount(followup_count);
+    };
+
+    startChat();
   }, []);
 
   const handleSend = async () => {
     if (!input.trim()) return;
-
     const token = localStorage.getItem("jwt_token");
-    const userMsg = { sender: "user", text: input };
-    setMessages((prev) => [...prev, userMsg]);
+
+    setMessages((prev) => [...prev, { sender: "user", text: input }]);
 
     try {
       const res = await axios.post(
@@ -43,13 +74,11 @@ const ChatBot = ({ formData }) => {
         question_index,
         followup_count,
         show_result,
-        crf_keywords
+        crf_keywords,
       } = res.data;
 
-      // Save keywords if present
       if (crf_keywords) setCrfKeywords(crf_keywords);
 
-      // Add next question if exists
       if (next_question) {
         setMessages((prev) => [...prev, { sender: "bot", text: next_question }]);
         setQuestionIndex(question_index);
@@ -57,7 +86,6 @@ const ChatBot = ({ formData }) => {
         setAnswers((prev) => [...prev, input]);
       }
 
-      // Predict after Q10
       if (show_result && reply) {
         const predictRes = await axios.post(
           "http://localhost:5000/predict",
@@ -66,13 +94,14 @@ const ChatBot = ({ formData }) => {
             answers: [...answers, input],
           },
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
 
         const { prediction, confidence, advice } = predictRes.data;
 
-        // Save feedback
         await axios.post(
           "http://localhost:5000/log_feedback",
           {
@@ -83,7 +112,9 @@ const ChatBot = ({ formData }) => {
             symptoms: crfKeywords,
           },
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
 
@@ -95,13 +126,12 @@ const ChatBot = ({ formData }) => {
 
         setMessages((prev) => [...prev, ...summary]);
 
-        // Reset chat state
+        // Reset for next session
         setQuestionIndex(0);
         setFollowupCount(0);
         setAnswers([]);
         setCrfKeywords([]);
       }
-
     } catch (err) {
       console.error("Chat error:", err);
       setMessages((prev) => [
@@ -117,9 +147,7 @@ const ChatBot = ({ formData }) => {
     <div className="chat-container">
       <div className="chat-box">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.sender}`}>
-            {msg.text}
-          </div>
+          <div key={idx} className={`message ${msg.sender}`}>{msg.text}</div>
         ))}
       </div>
       <div className="input-box">

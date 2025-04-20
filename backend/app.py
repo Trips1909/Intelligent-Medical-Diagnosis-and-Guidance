@@ -10,17 +10,19 @@ from nlp import extract_symptoms
 import csv
 import os
 from datetime import timedelta
+import certifi
 
 # 🔁 Load environment variables
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-# ✅ MongoDB setup
-app.config["MONGO_URI"] = os.getenv("MONGO_URI")
-client = MongoClient(app.config["MONGO_URI"])
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
+
 db = client["Patient1"]
 users_collection = db["users"]
+
 
 # ✅ JWT setup
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your-secret-key")

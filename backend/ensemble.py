@@ -84,11 +84,15 @@ def _ensemble_predict(X_input, return_all=False):
     proba_lgbm = lgbm.predict_proba(X_input)
     proba_cat = catboost.predict_proba(X_input)
 
+    print("[DEBUG] XGBoost Probabilities:", dict(zip(labels, proba_xgb[0])))
+    print("[DEBUG] LightGBM Probabilities:", dict(zip(labels, proba_lgbm[0])))
+    print("[DEBUG] CatBoost Probabilities:", dict(zip(labels, proba_cat[0])))
+
     avg_proba = (0.5 * proba_xgb + 0.25 * proba_lgbm + 0.25 * proba_cat)[0]
     prediction = labels[np.argmax(avg_proba)]
     confidence = round(np.max(avg_proba) * 100, 2)
 
-    print(f"[DEBUG] Class Probabilities: {dict(zip(labels, avg_proba))}")
+    print(f"[DEBUG] Final Averaged Class Probabilities: {dict(zip(labels, avg_proba))}")
 
     if return_all:
         return dict(zip(labels, avg_proba)), confidence, prediction
