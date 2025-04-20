@@ -60,12 +60,30 @@ ARTICLE_LINKS = {
 
 # 🔧 Helper for Q1–Q10 mapping
 def interpret_q_answer(index, text):
-    text = text.lower()
-    if any(x in text for x in ["always", "frequently", "daily", "every day", "often", "all the time"]):
+    text = text.lower().strip()
+
+    # Strong Yes indicators (positive)
+    strong_yes = [
+        "always", "frequently", "daily", "every day", "often", "all the time",
+        "yes", "i do", "for sure", "definitely", "certainly", "absolutely", "regularly", "sure"
+    ]
+
+    # Weak/neutral indicators (maybe or sometimes)
+    maybe = [
+        "sometimes", "occasionally", "not often", "rarely", "maybe", "depends", "at times", "not sure", "it depends"
+    ]
+
+    # ✅ Return 1 for strong yes
+    if any(phrase in text for phrase in strong_yes):
         return 1
-    elif any(x in text for x in ["sometimes", "occasionally", "not often", "rarely"]):
+
+    # ⚖️ Return 0 for neutral
+    elif any(phrase in text for phrase in maybe):
         return 0
+
+    # ❌ Otherwise, not enough to interpret
     return -1
+
 
 def form_keys():
     return [
