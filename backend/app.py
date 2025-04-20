@@ -144,9 +144,8 @@ def gpt_followup():
 
     adjusted_conf = adjust_confidence(base_conf, all_responses)
 
-
     if len(all_responses) < 5:
-        next_q = route_next_question(symptoms, diagnosis, base_conf)
+        next_q = route_next_question(symptoms, diagnosis, base_conf, len(all_responses))
         return jsonify({
             "next_gpt_question": next_q,
             "updated_confidence": adjusted_conf,
