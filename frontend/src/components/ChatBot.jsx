@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "../ChatBot.css";
+import YtRecommendations from "./YtRecommendations";
 
 const ChatBot = ({ formData }) => {
   const [messages, setMessages] = useState([]);
@@ -14,6 +15,7 @@ const ChatBot = ({ formData }) => {
   const [diagnosis, setDiagnosis] = useState("");
   const [advice, setAdvice] = useState("");
   const [resourceLinks, setResourceLinks] = useState([]);
+  const [showFinalOutput, setShowFinalOutput] = useState(false); // ✅ NEW
 
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
@@ -35,9 +37,15 @@ const ChatBot = ({ formData }) => {
       const { next_question, question_index, crf_keywords } = res.data;
 
       setMessages([
-        { sender: "bot", text: "🧠 Welcome to your personal mental health assistant!" },
-        { sender: "bot", text: "Let's begin with a few quick questions to understand you better." },
-        { sender: "bot", text: next_question }
+        {
+          sender: "bot",
+          text: "🧠 Welcome to your personal mental health assistant!",
+        },
+        {
+          sender: "bot",
+          text: "Let's begin with a few quick questions to understand you better.",
+        },
+        { sender: "bot", text: next_question },
       ]);
 
       setQuestionIndex(question_index);
@@ -51,7 +59,7 @@ const ChatBot = ({ formData }) => {
     if (!input.trim()) return;
     const token = localStorage.getItem("jwt_token");
 
-    setMessages(prev => [...prev, { sender: "user", text: input }]);
+    setMessages((prev) => [...prev, { sender: "user", text: input }]);
     setInput("");
 
     if (showFollowups) {
@@ -73,26 +81,41 @@ const ChatBot = ({ formData }) => {
         if (res.data.final) {
           const finalMessages = [
             { sender: "bot", text: `✅ Final Diagnosis: ${diagnosis}` },
-            { sender: "bot", text: `✅ Adjusted Confidence Score: ${res.data.updated_confidence}%` },
-            { sender: "bot", text: `📌 Recommendation: ${advice}` }
+            {
+              sender: "bot",
+              text: `✅ Adjusted Confidence Score: ${res.data.updated_confidence}%`,
+            },
+            { sender: "bot", text: `📌 Recommendation: ${advice}` },
           ];
 
           if (res.data.resources && res.data.resources.length > 0) {
-            finalMessages.push({ sender: "bot", text: `📚 Helpful Resources:` });
+            finalMessages.push({
+              sender: "bot",
+              text: `📚 Helpful Resources:`,
+            });
             res.data.resources.forEach((link, idx) => {
-              finalMessages.push({ sender: "bot", text: `🔗 [${idx + 1}] ${link}` });
+              finalMessages.push({
+                sender: "bot",
+                text: `🔗 [${idx + 1}] ${link}`,
+              });
             });
           }
-          
 
-          setMessages(prev => [...prev, ...finalMessages]);
-          resetState();
+          setMessages((prev) => [...prev, ...finalMessages]);
+          setShowFinalOutput(true); // ✅ SHOW YouTube section permanently
+          resetState(); // Don't reset diagnosis
         } else {
           setGptResponses(res.data.gpt_responses);
-          setMessages(prev => [...prev, { sender: "bot", text: res.data.next_gpt_question }]);
+          setMessages((prev) => [
+            ...prev,
+            { sender: "bot", text: res.data.next_gpt_question },
+          ]);
         }
       } catch (err) {
-        setMessages(prev => [...prev, { sender: "bot", text: "⚠️ GPT follow-up failed." }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", text: "⚠️ GPT follow-up failed." },
+        ]);
       }
       return;
     }
@@ -110,18 +133,17 @@ const ChatBot = ({ formData }) => {
         }
       );
 
-      const {
-        next_question,
-        question_index,
-        show_result,
-        crf_keywords,
-      } = res.data;
+      const { next_question, question_index, show_result, crf_keywords } =
+        res.data;
 
-      setAnswers(prev => [...prev, input]);
+      setAnswers((prev) => [...prev, input]);
       if (crf_keywords) setCrfKeywords(crf_keywords);
 
       if (next_question) {
-        setMessages(prev => [...prev, { sender: "bot", text: next_question }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", text: next_question },
+        ]);
         setQuestionIndex(question_index);
       }
 
@@ -171,17 +193,22 @@ const ChatBot = ({ formData }) => {
         );
 
         setShowFollowups(true);
-        setMessages(prev => [
+        setMessages((prev) => [
           ...prev,
           { sender: "bot", text: `💡 Initial Diagnosis: ${prediction}` },
-          { sender: "bot", text: `🧪 Starting GPT-based follow-ups to fine-tune confidence...` },
+          {
+            sender: "bot",
+            text: `🧪 Starting GPT-based follow-ups to fine-tune confidence...`,
+          },
           { sender: "bot", text: gptInit.data.next_gpt_question },
         ]);
       }
-
     } catch (err) {
       console.error("Chat error:", err);
-      setMessages(prev => [...prev, { sender: "bot", text: "Something went wrong. Please try again." }]);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "bot", text: "Something went wrong. Please try again." },
+      ]);
     }
   };
 
@@ -192,29 +219,42 @@ const ChatBot = ({ formData }) => {
     setShowFollowups(false);
     setGptResponses([]);
     setBaseConfidence(null);
-    setDiagnosis("");
     setAdvice("");
+    // ❌ DO NOT reset diagnosis or showFinalOutput
+    // setDiagnosis("");
+    // setShowFinalOutput(false);
     setResourceLinks([]);
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-box">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.sender}`}>{msg.text}</div>
-        ))}
+    <>
+      <div className="chat-container">
+        <div className="chat-box">
+          {messages.map((msg, idx) => (
+            <div key={idx} className={`message ${msg.sender}`}>
+              {msg.text}
+            </div>
+          ))}
+        </div>
+        <div className="input-box">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Type your response..."
+          />
+          <button onClick={handleSend}>Send</button>
+        </div>
       </div>
-      <div className="input-box">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Type your response..."
-        />
-        <button onClick={handleSend}>Send</button>
-      </div>
-    </div>
+
+      {/* ✅ Show YouTube videos after final result is shown */}
+      {showFinalOutput && diagnosis && (
+        <div className="mt-6 px-4">
+          <YtRecommendations diagnosis={diagnosis} />
+        </div>
+      )}
+    </>
   );
 };
 
