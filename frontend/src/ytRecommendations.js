@@ -21,8 +21,8 @@ const youtubeRecommendations = {
   ],
   Autism: [
     {
-      title: "Coping with Autism Spectrum Disorder",
-      url: "https://youtu.be/JYPeOm5A8XQ?si=6bt_O3UpAvShX8gD",
+      title: "Autism Spectrum Disorder Explained",
+      url: "https://www.youtube.com/watch?v=p6Xd4cg40no",
     },
     {
       title: "Support Strategies for Autism",
