@@ -75,6 +75,10 @@ def form_keys():
         "Coping_Struggles", "Work_Interest", "Social_Weakness", "mental_health_interview"
     ]
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "✅ Intelligent Medical API is running"}), 200
+
 # 💬 Chat route for Q1–Q10
 @app.route('/chat', methods=['POST'])
 @jwt_required()
@@ -214,6 +218,6 @@ def register():
 
 # 🚀 Start the app
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))  # default fallback if PORT not set
     print("✅ Flask app is starting...")
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=port)
